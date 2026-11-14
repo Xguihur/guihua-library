@@ -2,6 +2,12 @@
 
 后续开发任务的规格、测试矩阵、验收命令、真实结果、缺陷和结论统一放在 `docs/tasks/`。这些文档属于 monorepo 外部统一文档区，**不得**放入 `apps/web`、`apps/api` 或 `packages` 的内部目录。
 
+## 任务合集与 Agent 交接
+
+HSQL-7 至 HSQL-15 的原始描述、实施细化、顺序、测试与验收标准见 [collection/README.md](collection/README.md)。接手者先读 [HANDOFF.md](collection/HANDOFF.md)，核对最新阻塞，不能把交接规格当作已完成实现。
+
+`collection/HSQL-N.md` 保留规格；本目录 `HSQL-N.md` 保留执行过程和真实验收结果。已有记录只追加修订，不覆盖历史失败或审查意见。结构化原始描述见 [task-snapshot.json](collection/task-snapshot.json)。
+
 ## 文件命名
 
 每个阶段使用 `HSQL-<number>.md`，文件名必须与平台任务编号一致。任务拆分或契约变更不能覆盖历史验收证据；需要新范围时创建新版本或新任务文档，并链接前置记录。

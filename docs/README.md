@@ -19,6 +19,7 @@
 
 ## 当前入口
 
+- 迁移到其他 Agent：[任务合集与顺序索引](tasks/collection/README.md)、[当前阻塞与交接指令](tasks/collection/HANDOFF.md)
 - 执行方案：[`plans/SDD-PLAN-v1.2.md`](plans/SDD-PLAN-v1.2.md)
 - RESTful 资源契约：[`contracts/restful-api.md`](contracts/restful-api.md)
 - 统一错误语义：[`contracts/errors.md`](contracts/errors.md)
