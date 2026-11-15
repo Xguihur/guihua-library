@@ -1,0 +1,32 @@
+services:
+  mongo-dev:
+    image: mongo:7.0
+    container_name: guihua-library-mongo-dev
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - guihua-library-dev-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  mongo-test:
+    image: mongo:7.0
+    container_name: guihua-library-mongo-test
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:27018:27017"
+    volumes:
+      - guihua-library-test-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  guihua-library-dev-data:
+  guihua-library-test-data:

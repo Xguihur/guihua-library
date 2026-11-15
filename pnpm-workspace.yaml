@@ -1,0 +1,8 @@
+packages:
+  - apps/*
+  - packages/*
+
+# pnpm 11 blocks lifecycle scripts unless explicitly approved.
+# Only esbuild needs its install script (Vite/Vitest/tsx); no wildcard trust.
+allowBuilds:
+  esbuild: true

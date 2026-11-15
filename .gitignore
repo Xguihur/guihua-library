@@ -1,0 +1,13 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+
+# Browser automation output must never be committed
+playwright-report/
+test-results/
+smoke-artifacts/

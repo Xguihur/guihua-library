@@ -92,6 +92,29 @@
 | 业务规则不满足 | `422 UNPROCESSABLE_ENTITY`，是否采用需在实现 ADR 固化 |
 | 超过限流 | `429 RATE_LIMITED` |
 
+## M1 实现状态（2026-11-15）
+
+M1 只实现公开读取与健康检查；账号、发布、管理资源仍未实现。以下为已落地行为，与上文字段/状态码约定一致。
+
+| 方法 | 路径 | 已实现行为 |
+|---|---|---|
+| `GET` | `/api/books` | 仅 `visibility=published`；`status=reading\|finished` 可选；`page` 默认 1，`pageSize` 默认 20、上限 100；排序 `createdAt` 降序 + `_id` 降序；越界页返回空 `items` 与真实 `total` |
+| `GET` | `/api/books/:bookId` | 公开详情（含 `review`）；非 24 位十六进制 id → `400 VALIDATION_ERROR`；不存在与 `hidden` 均 `404 NOT_FOUND` 且消息一致 |
+| `GET` | `/api/books/:bookId/comments` | 先校验父书籍公开性，隐藏/不存在 404；仅返回 `visibility=published` 评论；分页与排序规则同上 |
+| `POST` | `/api/books`、`/api/books/:bookId/comments` | M1 无会话，固定 `401 UNAUTHORIZED`，不创建数据 |
+| `GET` | `/api/health/live` | `200 {"status":"ok"}` |
+| `GET` | `/api/health/ready` | DB ping 成功 `200`；不可用 `503 SERVICE_UNAVAILABLE`，不回显连接信息 |
+
+补充约束：
+
+- 查询参数严格校验：未知参数、重复参数、非十进制正整数、`pageSize > 100`、非法 `status`、超出 `Number.MAX_SAFE_INTEGER` 的 `page`，以及 `(page - 1) * pageSize` 溢出安全整数，一律 `400 VALIDATION_ERROR`，`details` 给出 `field` 与 `reason`（分页越界为 `{field:"page",reason:"out_of_range"}`）。
+- 列表 DTO：`id,slug,title,author,coverUrl,status,summary,owner,createdAt,updatedAt`；详情增加 `review`；评论 DTO：`id,bookId,content,author,createdAt,updatedAt`。`owner`/`author` 仅 `id,username,avatarUrl`，日期为 ISO 字符串，`coverUrl` 仅接受 http(s)，否则输出 `null`。
+- 统一错误体 `{error:{code,message,details,requestId}}`；`requestId` 同时写入 `x-request-id` 响应头。
+- 索引：`books_slug_unique(slug)`、`books_public_list(visibility,status,createdAt,_id)`、`books_owner_recent(ownerId,createdAt)`、`comments_public_list(bookId,visibility,createdAt,_id)`。
+- 浏览器只请求同源 `/api`，由 Vite 代理到本地 API，不启用全域 CORS。
+
+尚未实现（按里程碑）：`/api/users`、`/api/sessions`、`/api/me`、书籍/评论写入与维护、`/api/comments/{commentId}`、`/api/admin/*`。
+
 ## 非目标与冻结门槛
 
 本契约不加入密码找回、邮箱变更、验证码、富文本评论、嵌套评论、点赞或未批准的 GitHub 外部评论嵌入。GitHub OAuth 是身份提供方，不等于 GitHub 评论存储；外部评论产品必须另行 ADR。删除/软删除、草稿审核、头像来源、管理员初始化、精确用户名正则和 `400`/`422` 细分在对应实现前必须形成决策和测试，不能静默改变本契约。

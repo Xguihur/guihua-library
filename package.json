@@ -1,0 +1,35 @@
+{
+  "name": "guihua-library",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.5.2",
+  "engines": {
+    "node": ">=22.22.1 <23",
+    "pnpm": ">=11.5.2"
+  },
+  "scripts": {
+    "dev": "pnpm build:contracts && concurrently -n api,web -c blue,green \"pnpm --filter @guihua/api dev\" \"pnpm --filter @guihua/web dev\"",
+    "build:contracts": "pnpm --filter @guihua/contracts build",
+    "build": "pnpm build:contracts && pnpm --filter @guihua/api build && pnpm --filter @guihua/web build",
+    "typecheck": "pnpm build:contracts && pnpm -r --if-present typecheck",
+    "lint": "eslint .",
+    "test": "pnpm build:contracts && pnpm -r --if-present test",
+    "test:integration": "pnpm build:contracts && pnpm --filter @guihua/api test:integration",
+    "smoke": "pnpm build && pnpm --filter @guihua/api smoke",
+    "db:dev:up": "docker compose up -d --wait mongo-dev",
+    "db:dev:down": "docker compose rm -sf mongo-dev",
+    "db:test:up": "docker compose up -d --wait mongo-test",
+    "db:test:reset": "pnpm --filter @guihua/api reset-test-db",
+    "db:test:down": "docker compose rm -sf mongo-test",
+    "db:seed": "pnpm --filter @guihua/api seed",
+    "verify:isolation": "pnpm --filter @guihua/api verify:isolation"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.18.0",
+    "concurrently": "^9.1.2",
+    "eslint": "^9.18.0",
+    "eslint-plugin-vue": "^9.32.0",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.20.0"
+  }
+}
