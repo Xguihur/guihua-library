@@ -1,13 +1,13 @@
 # ADR 0001：技术栈与 monorepo workspace 边界
 
-- **状态**：Accepted for the v1.2 engineering baseline
+- **状态**：Accepted for the v1 engineering baseline
 - **日期**：2026-11-14
-- **依据**：`docs/plans/SDD-PLAN-v1.2.md`
+- **依据**：[项目总览](../PROJECT.md)
 - **范围**：工程目录、依赖边界和运行时职责；不实现业务功能
 
 ## 背景
 
-仓库从空基线开始，需要让公共站点、HTTP API 和前后端共享契约可以独立演进，同时避免把数据库模型或服务端内部模块泄露给浏览器。v1.2 已确定 Vue 3、Vite、NestJS、MongoDB/Mongoose 和 pnpm workspace 方向。
+仓库从空基线开始，需要让公共站点、HTTP API 和前后端共享契约可以独立演进，同时避免把数据库模型或服务端内部模块泄露给浏览器。v1 已确定 Vue 3、Vite、NestJS、MongoDB/Mongoose 和 pnpm workspace 方向。
 
 ## 决策
 
@@ -22,10 +22,13 @@ packages/
   config/              # 仅在配置重复且契约明确后抽取
 
 docs/
-  plans/               # SDD/TDD 方案
+  PROJECT.md           # 当前项目总览
+  ROADMAP.md           # 当前任务与进度
+  DEVELOPMENT.md       # 开发与环境
+  DECISIONS.md         # 待决事项
   contracts/           # RESTful HTTP 契约
   adr/                 # 架构/安全决策
-  tasks/               # 任务规格与验收证据
+
 ```
 
 ### 职责与依赖
@@ -42,7 +45,7 @@ docs/
 - 浏览器应用：Vue 3 + Vite。
 - HTTP 服务：NestJS。
 - 持久化：MongoDB + Mongoose。
-- Node、pnpm、MongoDB 和各依赖的可执行版本在阶段 0.2 的根配置和环境文档中固定；本 ADR 不凭空锁定尚未验证的版本号。
+- Node、pnpm、MongoDB 和各依赖的可执行版本在M1 的根配置和环境文档中固定；本 ADR 不凭空锁定尚未验证的版本号。
 
 ## 结果
 
@@ -55,8 +58,12 @@ docs/
 - 不创建动作式业务 endpoint；RESTful 资源、方法、状态码和错误结构以 `docs/contracts/` 为准。
 - 不把真实环境变量、数据库 URI、OAuth secret 或会话 secret 放入 workspace 或文档。
 - 不为未来需求预建空壳应用、mock endpoint、无效 fallback 或 TODO 实现。
-- 若需改变 workspace 边界、引入 SSR、替换 MongoDB/Mongoose 或让 web 直接访问数据库，必须新增 ADR 并更新 v1.2 契约/计划。
+- 若需改变 workspace 边界、引入 SSR、替换 MongoDB/Mongoose 或让 web 直接访问数据库，必须新增 ADR 并更新契约与项目总览。
 
 ## 未决项
 
 Node/pnpm/MongoDB 的精确支持版本、部署平台、MongoDB 托管、头像存储、管理员初始化和备份策略在后续阶段确认。未决项不得被实现默认值悄悄固化。
+
+## 2026-11-15 文档整理
+
+文档目录与导航已调整，技术栈和应用依赖边界保持原决策。当前入口见 [文档导航](../README.md)。

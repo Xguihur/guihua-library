@@ -1,13 +1,16 @@
 # 桂花图书馆
 
-Vue 3 + NestJS + MongoDB 的 pnpm monorepo 项目，目前仅有规划与契约文档，尚无应用实现。
+一个面向多人分享阅读记录的小型社区，也是持续实践前后端开发、测试、部署和线上运维的个人项目。
 
-## 接手入口
+访客可以浏览书籍、阅读状态、书评和评论；登录用户可以发布自己的阅读记录、参与评论；管理员维护内容与用户。
 
-1. 阅读 [任务合集](docs/tasks/collection/README.md)，查看 HSQL-7 至 HSQL-15 的范围与顺序。
-2. 阅读 [Agent 交接说明](docs/tasks/collection/HANDOFF.md)，先处理 HSQL-7 已有审查阻塞。
-3. 按 [执行手册](docs/tasks/collection/EXECUTION.md) 完成先测试、后实现、验证和独立审查。
+**当前状态：只有设计文档，尚无应用代码、可运行工程或已上线环境。**
 
-已批准业务基线为 [SDD v1.2](docs/plans/SDD-PLAN-v1.2.md)。所有规格、契约和验收记录统一放在根 `docs/`，不放进 `apps/` 或 `packages/`。
+## 从这里开始
 
-本分支是任务交接文档分支，文档齐全不代表功能已实现或应用测试已通过。
+- [项目总览](docs/PROJECT.md)：为什么做、做什么、如何实现与学习边界。
+- [路线图与进度](docs/ROADMAP.md)：五个交付里程碑、完成标准、当前下一步。
+- [开发与环境](docs/DEVELOPMENT.md)：协作、测试、本地及线上环境、发布原则。
+- [文档导航](docs/README.md)：接口契约与待决事项。
+
+技术方向：Vue 3 / Vite、NestJS、MongoDB / Mongoose、pnpm workspace。

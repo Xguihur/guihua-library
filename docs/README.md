@@ -1,27 +1,18 @@
-# 项目文档
+# 文档导航
 
-本目录是桂花图书馆的统一工程文档区，随 monorepo 版本管理。它**不属于** `apps/web`、`apps/api` 或 `packages`，不放置前端、后端或共享包的业务实现。
+日常从[项目总览](PROJECT.md)进入，推进开发时只在[路线图](ROADMAP.md)维护里程碑状态。
 
-## 文档结构
+| 文档 | 负责什么 |
+|---|---|
+| [PROJECT.md](PROJECT.md) | 产品定位、范围、架构和技术实践目标 |
+| [ROADMAP.md](ROADMAP.md) | 任务拆分、交付标准、当前进度与简短验收记录 |
+| [DEVELOPMENT.md](DEVELOPMENT.md) | 开发、测试、环境隔离、部署与交付规则 |
+| [DECISIONS.md](DECISIONS.md) | 未决问题及解决时点 |
+| [RESTful API](contracts/restful-api.md)、[错误语义](contracts/errors.md) | HTTP 与数据边界的唯一维护位置 |
+| [技术栈 ADR](adr/0001-stack-and-workspace.md) | 已选技术栈和依赖边界 |
 
-- `plans/`：版本化 SDD/TDD 实施方案。当前执行依据是 `SDD-PLAN-v1.2.md`；v1.0、v1.1 仅保留历史记录，均已废止。
-- `contracts/`：前后端共同遵守的 RESTful HTTP、资源、状态码、查询参数和错误语义。实现应以这里的契约和共享 schema 为准，不能以控制器偶然返回值替代。
-- `adr/`：架构决策记录，说明已选择的边界、取舍和未决事项。
-- `tasks/`：各阶段任务规格、TDD 测试矩阵、验收命令、真实结果、缺陷和结论。
+## 维护规则
 
-## 约束
-
-1. 方案、契约、ADR 和任务验收证据统一放在本目录，不复制到 `apps/web`、`apps/api` 或 `packages` 的内部文档目录。
-2. 业务实现仍只能位于对应应用或共享包；本目录不创建 endpoint、mock endpoint、脚手架或临时 fallback。
-3. 破坏性契约变更必须递增契约版本或附迁移说明；不能静默改变字段、状态码或权限含义。
-4. 文档中的未决项必须明确标注，不能写成已验证事实。实现任务完成后，必须补充可复现命令和真实输出摘要。
-5. 不提交密钥、真实环境变量、OAuth secret、数据库 URI、会话 secret 或生产数据。
-
-## 当前入口
-
-- 迁移到其他 Agent：[任务合集与顺序索引](tasks/collection/README.md)、[当前阻塞与交接指令](tasks/collection/HANDOFF.md)
-- 执行方案：[`plans/SDD-PLAN-v1.2.md`](plans/SDD-PLAN-v1.2.md)
-- RESTful 资源契约：[`contracts/restful-api.md`](contracts/restful-api.md)
-- 统一错误语义：[`contracts/errors.md`](contracts/errors.md)
-- 技术栈与 workspace ADR：[`adr/0001-stack-and-workspace.md`](adr/0001-stack-and-workspace.md)
-- 任务规格规范：[`tasks/README.md`](tasks/README.md)
+- 产品范围只在 PROJECT 维护，进度只在 ROADMAP 维护，接口规则只在 contracts 维护。用户最新明确要求优先；业务规则冲突需先记录并解决。
+- 接口、身份、权限、删除策略的实质变化更新相应契约与决定；无需为普通措辞修订生成一整套新方案。
+- 文档统一放在根 docs，不在应用内复制。验收证据简短可复现，较大原始输出链接至 CI 或专项记录，不重复粘贴规范。
