@@ -25,9 +25,25 @@
 | `GET` | `/api/sessions/current` | 是 | `200` | 返回当前会话和非敏感用户资料、角色及有效权限 |
 | `DELETE` | `/api/sessions/current` | 否/幂等 | `204` | 撤销当前会话；无会话时仍为 `204` |
 | `GET` | `/api/oauth/github/authorization` | 否 | 重定向 | OAuth 协议入口；生成并保存 state/PKCE |
-| `GET` | `/api/oauth/github/callback` | 否 | 重定向/协议结果 | 校验 state/PKCE；已有 provider subject 登录，新用户进入唯一用户名设置流程 |
+| `GET` | `/api/oauth/github/callback` | 否 | 重定向/协议结果 | 校验 state/PKCE；已有 provider subject 登录，新用户自动创建唯一站内用户名并建立会话 |
 
 注册用户名必须是合法 ASCII 标识且唯一；中文用户名被拒绝。重复邮箱、用户名或 provider subject 返回 `409 IDENTITY_CONFLICT`。错误凭据统一返回 `401 INVALID_CREDENTIALS`，不得进行账号枚举。GitHub 邮箱与既有邮箱账号不得静默合并；显式关联必须由已登录用户发起。
+
+### 登录方式管理（M2 设计，尚未实现）
+
+统一站内 userId，GitHub 可直接注册登录，也可绑定已登录账号；首次 GitHub 登录自动生成合法唯一用户名，可在资料中修改。不根据邮箱自动合并用户，账号合并不在范围内。精确流程与安全规则见 [M2 §6](../specs/M2.md)。
+
+| 方法 | 路径 | 认证/输入 | 成功 |
+|---|---|---|---|
+| GET | `/api/me/login-methods` | 当前会话 | 200，本人登录方式与本地邮箱状态 |
+| POST | `/api/me/identities/github/authorizations` | 会话、近期复核；空 JSON | 201 `{authorizationUrl}`，绑定目的由服务端绑定到原会话 |
+| DELETE | `/api/me/identities/github` | 会话、近期复核；保留已验证邮箱密码方式 | 204；最后方式返回 409 LAST_LOGIN_METHOD |
+| POST | `/api/sessions/current/reauthentications` | 会话；`{password}` | 204，记录会话绑定的近期复核 |
+| POST | `/api/sessions/current/github/authorizations` | 会话；空 JSON | 201 `{authorizationUrl}`，回调仅接受当前账号已绑定的 subject |
+| POST | `/api/me/password-credentials/verifications` | 会话、近期复核；`{email}` | 202 固定消息，邮件发送验证链接 |
+| POST | `/api/me/password-credentials` | 会话、近期复核；`{token,password}`，已存在本地密码且仅验证原邮箱时为 `{token}` | 204，原子消费挑战并添加凭据或标记原邮箱 verified |
+
+邮箱密码注册不强制验证；GitHub 用户添加密码方式必须验证邮箱。已存在邮箱密码时，只能验证原邮箱，不更换邮箱或覆盖密码。OAuth login/link/reauth 共享既有 callback，purpose、userId、原 session 由服务端 state 记录决定，不能由客户端覆盖。绑定冲突 409 IDENTITY_CONFLICT；复核缺失/过期 403 FORBIDDEN；无效验证挑战 400 VALIDATION_ERROR。身份方式变更后撤销其他会话并轮换当前 Cookie，公共 DTO 不暴露登录方式或邮箱。全部新增端点仍属待实施，不能按本节宣称已可用。
 
 ### 当前用户
 
@@ -117,4 +133,4 @@ M1 只实现公开读取与健康检查；账号、发布、管理资源仍未�
 
 ## 非目标与冻结门槛
 
-本契约不加入密码找回、邮箱变更、验证码、富文本评论、嵌套评论、点赞或未批准的 GitHub 外部评论嵌入。GitHub OAuth 是身份提供方，不等于 GitHub 评论存储；外部评论产品必须另行 ADR。删除/软删除、草稿审核、头像来源、管理员初始化、精确用户名正则和 `400`/`422` 细分在对应实现前必须形成决策和测试，不能静默改变本契约。
+本契约包含 M2 为添加密码/安全解绑提供的邮箱归属验证，不加入密码找回、邮箱变更、验证码、富文本评论、嵌套评论、点赞或未批准的 GitHub 外部评论嵌入。GitHub OAuth 是身份提供方，不等于 GitHub 评论存储；外部评论产品必须另行 ADR。删除/软删除、草稿审核、头像来源、管理员初始化、精确用户名正则和 `400`/`422` 细分在对应实现前必须形成决策和测试，不能静默改变本契约。
