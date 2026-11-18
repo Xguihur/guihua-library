@@ -4,6 +4,7 @@ import { createServer } from 'node:net';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import mongoose from 'mongoose';
+import { SESSION_COOKIE_NAME } from '@guihua/contracts';
 import { chromium, type Browser, type Page } from 'playwright';
 import { cliFailureMessage } from '../../src/config/cli-failure';
 import { findRepoRoot, loadRootEnv } from '../../src/config/runtime';
@@ -140,6 +141,72 @@ async function runBrowserFlow(page: Page): Promise<void> {
   assert(anonymousWrite.code === 'UNAUTHORIZED', `expected UNAUTHORIZED, saw ${anonymousWrite.code}`);
 }
 
+/** Registration, reload restore, profile edit, logout and the old-cookie 401 check. */
+async function runAuthFlow(page: Page): Promise<void> {
+  await page.goto(`${WEB_BASE}/register`, { waitUntil: 'domcontentloaded' });
+  await page.getByTestId('register-email').fill('smoke@example.com');
+  await page.getByTestId('register-username').fill('Smoke_Reader');
+  await page.getByTestId('register-password').fill('smoke-password-2026');
+  await page.getByTestId('register-submit').click();
+  await page.getByTestId('profile-save').waitFor({ timeout: 15000 });
+  await page.waitForURL(/\/me$/, { timeout: 10000 });
+  await page.getByTestId('nav-user').filter({ hasText: 'Smoke_Reader' }).waitFor({ timeout: 10000 });
+
+  const sessionCookie = (await page.context().cookies())
+    .filter((cookie) => cookie.name === SESSION_COOKIE_NAME)
+    .map((cookie) => `${cookie.name}=${cookie.value}`)
+    .join('; ');
+  assert(sessionCookie.length > 0, 'expected an opaque session cookie after registration');
+
+  // Refresh restores identity from the server session, not from local storage.
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.getByTestId('nav-user').filter({ hasText: 'Smoke_Reader' }).waitFor({ timeout: 10000 });
+
+  // A valid session still gets a truthful 403 for unopened M3 writes.
+  const authedWrite = await page.evaluate(async () => {
+    const response = await fetch('/api/books', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'valid session smoke attempt' }),
+    });
+    const body = (await response.json()) as { error?: { code?: string } };
+    return { status: response.status, code: body.error?.code };
+  });
+  assert(authedWrite.status === 403, `expected authenticated POST to return 403, saw ${authedWrite.status}`);
+  assert(authedWrite.code === 'FORBIDDEN', `expected FORBIDDEN, saw ${authedWrite.code}`);
+
+  // Account settings reads this user's own login methods; GitHub is unconfigured
+  // in smoke, so only the status and guidance are asserted, never a real OAuth.
+  await page.goto(`${WEB_BASE}/settings`, { waitUntil: 'domcontentloaded' });
+  await page.getByTestId('github-status').filter({ hasText: '未绑定' }).waitFor({ timeout: 10000 });
+  await page.getByTestId('password-status').filter({ hasText: 'smoke@example.com' }).waitFor({ timeout: 10000 });
+  await page.goto(`${WEB_BASE}/me`, { waitUntil: 'domcontentloaded' });
+
+  // Profile edit survives a reload and is rendered as plain text.
+  await page.getByTestId('profile-signature').fill('smoke 签名更新');
+  await page.getByTestId('profile-save').click();
+  await page.getByTestId('profile-saved').waitFor({ timeout: 10000 });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.getByTestId('profile-signature').waitFor({ timeout: 10000 });
+  const signature = await page.getByTestId('profile-signature').inputValue();
+  assert(signature === 'smoke 签名更新', `expected saved signature, saw ${signature}`);
+
+  // Logout clears the local identity; the previously issued cookie is now inert.
+  await page.getByTestId('nav-logout').click();
+  await page.getByTestId('nav-login').waitFor({ timeout: 10000 });
+  const oldCookie = await fetch(`${API_BASE}/api/sessions/current`, { headers: { Cookie: sessionCookie } });
+  assert(oldCookie.status === 401, `expected old cookie to return 401, saw ${oldCookie.status}`);
+
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.getByTestId('nav-login').waitFor({ timeout: 10000 });
+
+  // The login page exposes a GitHub entry with explicit no-auto-merge guidance.
+  await page.goto(`${WEB_BASE}/login`, { waitUntil: 'domcontentloaded' });
+  await page.getByTestId('github-login').waitFor({ timeout: 10000 });
+  const guidance = await page.getByTestId('github-login').locator('..').innerText();
+  assert(guidance.includes('已有邮箱账号不会按邮箱合并'), 'expected GitHub entry to explain no auto-merge');
+}
+
 async function main(): Promise<void> {
   loadRootEnv();
 
@@ -172,6 +239,8 @@ async function main(): Promise<void> {
       NODE_ENV: 'test',
       MONGODB_URI: uri,
       PORT: String(API_PORT),
+      // The Vite preview origin is where the browser runs during smoke.
+      ALLOWED_ORIGINS: `http://127.0.0.1:${WEB_PORT}`,
     });
     await waitForHttp(`${API_BASE}/api/health/ready`, api);
     console.log('[smoke] api ready');
@@ -191,7 +260,9 @@ async function main(): Promise<void> {
     browser = await chromium.launch();
     const page = await browser.newPage();
     await runBrowserFlow(page);
-    console.log('[smoke] browser flow passed');
+    console.log('[smoke] browser M1 flow passed');
+    await runAuthFlow(page);
+    console.log('[smoke] browser auth/profile flow passed');
   } catch (error) {
     if (browser) {
       const page = await browser.newPage().catch(() => null);
@@ -206,6 +277,8 @@ async function main(): Promise<void> {
       db.collection('users').deleteMany({}),
       db.collection('books').deleteMany({}),
       db.collection('comments').deleteMany({}),
+      db.collection('sessions').deleteMany({}),
+      db.collection('identities').deleteMany({}),
     ]);
     await connection.close();
   }

@@ -18,18 +18,34 @@
 
 ### 认证与会话
 
-| 方法 | 路径 | 认证 | 成功 | 说明 |
-|---|---|---|---:|---|
-| `POST` | `/api/users` | 否 | `201` | 邮箱注册；输入 `email`、`password`、`username`；创建会话并返回 `UserPublic` |
-| `POST` | `/api/sessions` | 否 | `201` | 使用邮箱或用户名 + 密码创建会话；凭证通过批准的 HttpOnly Cookie 建立 |
-| `GET` | `/api/sessions/current` | 是 | `200` | 返回当前会话和非敏感用户资料、角色及有效权限 |
-| `DELETE` | `/api/sessions/current` | 否/幂等 | `204` | 撤销当前会话；无会话时仍为 `204` |
-| `GET` | `/api/oauth/github/authorization` | 否 | 重定向 | OAuth 协议入口；生成并保存 state/PKCE |
-| `GET` | `/api/oauth/github/callback` | 否 | 重定向/协议结果 | 校验 state/PKCE；已有 provider subject 登录，新用户自动创建唯一站内用户名并建立会话 |
+统一站内 userId，邮箱密码与 GitHub subject 都指向同一用户，不按邮箱静默合并。精确规则见 [ADR 0002](../adr/0002-account-and-session.md) 与 [M2 规格](../specs/M2.md)。
 
-注册用户名必须是合法 ASCII 标识且唯一；中文用户名被拒绝。重复邮箱、用户名或 provider subject 返回 `409 IDENTITY_CONFLICT`。错误凭据统一返回 `401 INVALID_CREDENTIALS`，不得进行账号枚举。GitHub 邮箱与既有邮箱账号不得静默合并；显式关联必须由已登录用户发起。
+| 方法 | 路径 | 认证 | 输入 | 成功 |
+|---|---|---|---|---|
+| `POST` | `/api/users` | 否 | 严格 `{email, username, password}` | `201 UserPublic`，设置 `guihua_session` Cookie 并自动创建会话 |
+| `POST` | `/api/sessions` | 否 | 严格 `{identifier, password}` | `201 SessionCurrent`，设置新 Cookie 并撤销旧 token |
+| `GET` | `/api/sessions/current` | 是 | 无 | `200 SessionCurrent`；缺失/过期/撤销/禁用均 `401 UNAUTHORIZED` |
+| `DELETE` | `/api/sessions/current` | 否/幂等 | 无业务字段 | `204`，无响应体；撤销当前会话并清 Cookie，无会话仍 `204` |
+| `GET` | `/api/me` | 是 | 无 | `200 UserPublic` |
+| `PATCH` | `/api/me` | 是 | `username/gender/avatarUrl/signature` 的非空子集 | `200` 更新后的 `UserPublic` |
+| `GET` | `/api/oauth/github/authorization` | 否 | 无 | 重定向；生成并保存 state/PKCE（M2c） |
+| `GET` | `/api/oauth/github/callback` | 否 | `code/state` | 校验后跳转站内并清除查询串（M2c） |
 
-### 登录方式管理（M2 设计，尚未实现）
+**精确 DTO**（运行时 schema、共享类型和 HTTP 断言保持一致）：
+- `UserPublic` = `{id, username, gender, avatarUrl, signature, createdAt}`；`id` 为字符串，`createdAt` 为 ISO 时间。公共作者投影保持 M1 的 `{id, username, avatarUrl}`，不自动扩大。
+- `SessionCurrent` = `{user: UserPublic, roles: string[], permissions: string[], expiresAt: string}`；角色/权限只在认证响应出现，M2 有效权限为 `[]`。不得包含 session token/摘要、邮箱、密码哈希、OAuth subject/token 或内部字段。
+
+注册用户名 `trim` 后须匹配 `^[A-Za-z][A-Za-z0-9_]{2,31}$`；非法固定 `400 INVALID_USERNAME`，中文名被拒；唯一键为 ASCII 小写 `usernameNormalized`，登录大小写不敏感。邮箱 `trim` 后整体小写、合法格式且 ≤254 字符，不做去点/去加号。密码 12–128 个 Unicode 码点且 UTF-8 ≤512 字节，不 trim/截断/归一化。重复归一化用户名或邮箱返回 `409 IDENTITY_CONFLICT`（由唯一索引与重复键映射最终保证，并发注册仅一个成功）；错误凭据统一 `401 INVALID_CREDENTIALS`，不区分不存在/密码错/禁用/无本地密码，不存在账号也做等价哈希工作。不接受客户端角色，新用户固定普通 `user`。
+
+**请求防护与会话边界**：
+- 浏览器 JSON 写请求（含注册/登录/退出/PATCH）要求配置的精确 `Origin` 白名单和 `application/json`：恶意/缺失/`null` Origin `403 FORBIDDEN`，错误 Content-Type `400 VALIDATION_ERROR`。默认不开跨源凭据 CORS；OAuth GET 回调按 state/PKCE 单独保护。
+- Cookie `guihua_session`：HttpOnly、SameSite=Lax、Path=/、无 Domain、Max-Age 与 7 天服务端期限一致；生产强制 Secure，本地 HTTP 允许非 Secure；清除时属性匹配。token 至少 32 字节随机，库里只存 SHA-256 摘要、userId、createdAt、expiresAt；TTL 仅用于清理，鉴权必须显式检查到期。不在 localStorage、URL 或响应 DTO 放 token。
+- 限流（单实例有界内存、重启重置、多实例不共享）：注册每 IP 15 分钟 5 次；登录每 IP 15 分钟 30 次且每归一化 identifier 15 分钟 10 次；OAuth 每 IP 15 分钟 20 次。超限 `429 RATE_LIMITED` 带 `Retry-After`。计数器容量硬上限 1024 个不同 key：只淘汰已过期桶，全部仍活跃时对新增 key 直接返回 429（失败关闭），绝不驱逐活跃条目来绕过限流。登录的 IP 计数在严格白名单校验之前完成，未知字段等被拒请求同样计入。
+- 资料写入：`signature` 最长 200 个 Unicode 码点（按码点而非 UTF-16 单元计），拒绝 C0 控制字符（允许换行与制表符）和 DEL，按纯文本渲染；`avatarUrl` 为 null 或 ≤2048 字符的 HTTPS 绝对 URL，禁止 userinfo/控制字符，前端以 `no-referrer` 加载并在失败时显示占位，服务端不抓取、不上传。`gender` 仅接受 `unspecified|male|female|other`；空对象与未知字段 `400 VALIDATION_ERROR`，归一化用户名冲突 `409 IDENTITY_CONFLICT`。
+
+**事务与隔离**：用户/身份/挑战/凭据变更用 MongoDB 事务保持一致；dev 与 test 分别是独立单节点 replica set（不同容器、端口、卷与 replSetName），不假设 standalone 支持事务；外部发信/换 token 不放入长事务。迁移与回滚限制见 ADR 0002 §7。
+
+### 登录方式管理（批次 E 已实现本地验证；真实 GitHub 外部流程阻塞）
 
 统一站内 userId，GitHub 可直接注册登录，也可绑定已登录账号；首次 GitHub 登录自动生成合法唯一用户名，可在资料中修改。不根据邮箱自动合并用户，账号合并不在范围内。精确流程与安全规则见 [M2 §6](../specs/M2.md)。
 
@@ -43,7 +59,9 @@
 | POST | `/api/me/password-credentials/verifications` | 会话、近期复核；`{email}` | 202 固定消息，邮件发送验证链接 |
 | POST | `/api/me/password-credentials` | 会话、近期复核；`{token,password}`，已存在本地密码且仅验证原邮箱时为 `{token}` | 204，原子消费挑战并添加凭据或标记原邮箱 verified |
 
-邮箱密码注册不强制验证；GitHub 用户添加密码方式必须验证邮箱。已存在邮箱密码时，只能验证原邮箱，不更换邮箱或覆盖密码。OAuth login/link/reauth 共享既有 callback，purpose、userId、原 session 由服务端 state 记录决定，不能由客户端覆盖。绑定冲突 409 IDENTITY_CONFLICT；复核缺失/过期 403 FORBIDDEN；无效验证挑战 400 VALIDATION_ERROR。身份方式变更后撤销其他会话并轮换当前 Cookie，公共 DTO 不暴露登录方式或邮箱。全部新增端点仍属待实施，不能按本节宣称已可用。
+邮箱密码注册不强制验证；GitHub 用户添加密码方式必须验证邮箱。已存在邮箱密码时，只能验证原邮箱，不更换邮箱或覆盖密码。OAuth login/link/reauth 共享既有 callback，purpose、userId、原 session 由服务端 state 记录决定，不能由客户端覆盖。绑定冲突 409 IDENTITY_CONFLICT；复核缺失/过期 403 FORBIDDEN；无效验证挑战 400 VALIDATION_ERROR。身份方式变更后撤销其他会话并轮换当前 Cookie，公共 DTO 不暴露登录方式或邮箱。
+
+批次 E 已按本节实现上述端点并通过本地真实 HTTP/数据库与 Mailpit 实投验证（见 [M2 §9](../specs/M2.md)）。浏览器回调默认 302 到固定结果页并清除 code/state 查询串；带 `Accept: application/json` 的回调返回契约错误状态（绑定冲突 409）。真实 GitHub 授权/重新登录与生产 SMTP 投递仍未验证，不能据此宣称外部流程可用。
 
 ### 当前用户
 
@@ -129,7 +147,7 @@ M1 只实现公开读取与健康检查；账号、发布、管理资源仍未�
 - 索引：`books_slug_unique(slug)`、`books_public_list(visibility,status,createdAt,_id)`、`books_owner_recent(ownerId,createdAt)`、`comments_public_list(bookId,visibility,createdAt,_id)`。
 - 浏览器只请求同源 `/api`，由 Vite 代理到本地 API，不启用全域 CORS。
 
-尚未实现（按里程碑）：`/api/users`、`/api/sessions`、`/api/me`、书籍/评论写入与维护、`/api/comments/{commentId}`、`/api/admin/*`。
+尚未实现（按里程碑）：书籍/评论写入与维护、`/api/comments/{commentId}`、`/api/admin/*`。注册、登录、当前会话、退出、`GET`/`PATCH /api/me` 已在 M2a/M2b 实现并有真实 HTTP 与浏览器证据；M2c 的 GitHub/登录方式/邮件验证端点已在批次 E 实现并以真实 HTTP/数据库与 Mailpit 实投验证（真实 GitHub 外部流程仍阻塞）。
 
 ## 非目标与冻结门槛
 

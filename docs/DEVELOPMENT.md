@@ -1,6 +1,6 @@
 # 开发、测试与环境
 
-更新日期：2026-11-15。M1 已在本地完成安装、类型、lint、离线测试、构建、真实 MongoDB 集成与浏览器 smoke 验证；交付分支为 `dev`，仍无线上环境。
+更新日期：2026-11-18。M1 已在本地完成全流程验证；M2 批次 A–E（契约/ADR、M2a API/UI、M2b 资料 API/UI、M2c GitHub/复核/邮件验证）均已实现并以真实命令、浏览器和本地 Mailpit 实投验证；真实 GitHub 授权与生产 SMTP 仍未验证，M2 标记外部阻塞。工作分支 `codex/m2-accounts` 尚未提交，远程 CI 与线上环境仍未启用。
 
 ## 开发节奏
 
@@ -34,7 +34,15 @@
 
 开发库与测试库使用不同 Compose service、端口和数据卷，端口只绑定 `127.0.0.1`，容器与卷统一 `guihua-library-*` 前缀，避免影响其他项目。`db:dev:down` 与 `db:test:down` 只移除各自的容器并保留数据卷，不会停止另一个环境。
 
-配置只提供无密钥 `.env.example`。API 与 CLI 入口从仓库根目录读取 `.env`（cwd 在仓库内即可，不要求等于仓库根），并用 zod 校验 `MONGODB_URI`、`PORT`、`NODE_ENV`：`PORT` 必须是 1–65535 的十进制整数，`MONGODB_URI` 必须是带主机和库名的 `mongodb://` URI；缺失或非法直接失败。错误只列字段名，不回显 URI、凭据或堆栈。
+两库各自是独立单节点 replica set（`rsDev` / `rsTest`），不是 standalone，因此 MongoDB 事务可用；`up` 命令会等待各自主节点就绪。M1 开发库的账号回填与新增索引用 `pnpm db:migrate` 完成，可重复执行，只作用于白名单本地库，遇到用户名/邮箱冲突即停止、不清库。批次 E 起，迁移在预检通过后先建 string-only partial unique 索引，再按**精确名**删除已知 M1 旧 `users_email_unique`（让多个 null 邮箱 OAuth-only 用户共存）；未知索引保留，回滚需先移除所有 null 邮箱用户后手动重建该索引。
+
+邮件验证在本地用仅绑定 `127.0.0.1` 的 Mailpit 捕获：SMTP `127.0.0.1:1025`、HTTP API `127.0.0.1:8025`，`pnpm mail:up` 启动、`pnpm mail:down` 仅移除该容器（消息只存内存）。SMTP、GitHub 均为可选配置：缺 GitHub client id/secret 或 SMTP_HOST 时相关入口返回脱敏 503，其余功能照常；测试用的 GitHub 是明确标注“模拟 GitHub（测试替身）”的注入替身，不是真实授权。生产 SMTP 与真实 GitHub 回调均未验证。
+
+生产 SMTP 必须显式启用 TLS，不能沿用本地明文配置：`SMTP_SECURE=true` + `SMTP_PORT=465` 为隐式 TLS；`SMTP_SECURE=false` + `SMTP_REQUIRE_TLS=true` + `SMTP_PORT=587` 为强制 STARTTLS。两个开关默认均为 `false`，只服务于本地 Mailpit；带凭据的连接不得在明文通道上发送。连接、问候和 socket 超时由 `MAIL_TIMEOUT_MS` 限定。
+
+GitHub OAuth 的授权码流程与 PKCE S256 参数按[官方“Authorizing OAuth Apps”文档](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps)核对：本项目发送 `code_challenge`/`code_challenge_method=S256` 与服务端生成的 `state`，换 token 时提交 `code_verifier`，回调 `redirect_uri` 必须与 OAuth App 注册值逐字一致且不从请求参数读取。真实 GitHub 授权尚未执行，本地仅以模拟替身覆盖协议与数据库行为。
+
+配置只提供无密钥 `.env.example`。API 与 CLI 入口从仓库根目录读取 `.env`（cwd 在仓库内即可，不要求等于仓库根），并用 zod 校验 `MONGODB_URI`、`PORT`、`NODE_ENV`、`ALLOWED_ORIGINS`：`PORT` 必须是 1–65535 的十进制整数，`MONGODB_URI` 必须是带主机和库名的 `mongodb://` URI，`ALLOWED_ORIGINS` 是精确 http(s) 源白名单（不接受通配符）；缺失或非法直接失败。错误只列字段名，不回显 URI、凭据或堆栈。
 
 ## 数据库安全规则
 
@@ -55,17 +63,19 @@
 | `pnpm test` | contracts、API 单元测试、Web 组件测试；一次运行退出 |
 | `pnpm build` | contracts → API（tsc）→ web（vue-tsc + vite build） |
 | `pnpm test:integration` | 真实 MongoDB 集成测试，数据库不可用即失败 |
-| `pnpm smoke` | 构建后启动自有 API（:3100）/preview（:4173）进程，启动前先确认端口空闲，Playwright 跑公开浏览流程 |
+| `pnpm smoke` | 构建后启动自有 API（:3100）/preview（:4173）进程，启动前先确认端口空闲，Playwright 跑公开浏览与注册→刷新→资料→退出→旧 Cookie 401、有效会话写 403 流程 |
 | `pnpm db:dev:up` / `db:dev:down` | 开发库生命周期；down 只移除 mongo-dev 并保留卷 |
 | `pnpm db:test:up` / `db:test:reset` / `db:test:down` | 测试库生命周期；down 只移除 mongo-test 并保留卷 |
 | `pnpm db:seed` | 写入演示夹具 |
+| `pnpm db:migrate` | 本地开发库 M1→M2 回填与新增索引；遇冲突即停；建 partial unique 后按精确名删 `users_email_unique`，未知索引不动 |
+| `pnpm mail:up` / `mail:down` | 本地绑定 Mailpit 捕获服务生命周期；down 只移除该容器 |
 | `pnpm verify:isolation` | dev 哨兵隔离验证 |
 
 ## 测试分层
 
 - 离线：contracts 的查询/分页/错误契约，API 的 DTO 白名单映射、错误过滤、配置与库名校验、健康检查失败路径，Web 的请求构造、筛选/分页、过期响应保护、错误重试、404、评论分页与转义。
 - 集成：真实 NestJS 应用 + 真实 MongoDB，覆盖 published 过滤、组合分页排序、隐藏/不存在一致 404、匿名单写 401 且数据不变、父资源校验、索引与唯一约束。
-- smoke：真实构建产物 + 浏览器，覆盖列表、筛选、详情、评论、返回、隐藏书 404 与匿名 POST 401。
+- smoke：真实构建产物 + 浏览器，覆盖列表、筛选、详情、评论、返回、隐藏书 404、匿名 POST 401，以及注册→刷新恢复→资料保存→退出→旧 Cookie 401、有效会话写 403。smoke 为自有 API 进程覆盖 `ALLOWED_ORIGINS` 为 preview 源，结束时清理 users/books/comments/sessions/identities。
 
 浏览器自动化使用 Playwright。日志只保留摘要与 `smoke-artifacts/` 路径；截图、trace、`node_modules`、`.env` 不入库。
 

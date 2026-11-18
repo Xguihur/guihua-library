@@ -1,28 +1,63 @@
 services:
+  # Each environment is its own single-node replica set so MongoDB transactions
+  # are available. They never share a replSetName, port, container or volume.
   mongo-dev:
     image: mongo:7.0
     container_name: guihua-library-mongo-dev
     restart: unless-stopped
+    command: ["mongod", "--replSet", "rsDev", "--bind_ip_all", "--port", "27017"]
     ports:
       - "127.0.0.1:27017:27017"
     volumes:
       - guihua-library-dev-data:/data/db
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      # Initiates the set once, then stays healthy only while this node is a
+      # writable primary. No credentials or host names beyond the local port.
+      test:
+        - CMD-SHELL
+        - >-
+          mongosh --quiet --port 27017 --eval '
+          try { if (rs.status().ok && db.adminCommand({hello:1}).isWritablePrimary) print(1); else print(0) }
+          catch (e) { try { print(rs.initiate({_id:"rsDev",members:[{_id:0,host:"127.0.0.1:27017"}]}).ok) } catch (e2) { print(0) } }
+          ' | grep -q 1
       interval: 5s
-      timeout: 5s
-      retries: 20
+      timeout: 10s
+      retries: 30
 
   mongo-test:
     image: mongo:7.0
     container_name: guihua-library-mongo-test
     restart: unless-stopped
+    command: ["mongod", "--replSet", "rsTest", "--bind_ip_all", "--port", "27018"]
     ports:
-      - "127.0.0.1:27018:27017"
+      - "127.0.0.1:27018:27018"
     volumes:
       - guihua-library-test-data:/data/db
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      test:
+        - CMD-SHELL
+        - >-
+          mongosh --quiet --port 27018 --eval '
+          try { if (rs.status().ok && db.adminCommand({hello:1}).isWritablePrimary) print(1); else print(0) }
+          catch (e) { try { print(rs.initiate({_id:"rsTest",members:[{_id:0,host:"127.0.0.1:27018"}]}).ok) } catch (e2) { print(0) } }
+          ' | grep -q 1
+      interval: 5s
+      timeout: 10s
+      retries: 30
+
+  # Local-only mail capture for the M2c email-verification flow. SMTP on 1025,
+  # read-only HTTP API on 8025, both bound to loopback. Not a production MTA;
+  # messages are held in memory and discarded when the container is removed.
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: guihua-library-mailpit
+    restart: unless-stopped
+    command: ["--smtp", "0.0.0.0:1025", "--listen", "0.0.0.0:8025", "--max", "200"]
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
       interval: 5s
       timeout: 5s
       retries: 20

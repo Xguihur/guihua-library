@@ -21,7 +21,10 @@
     "db:test:up": "docker compose up -d --wait mongo-test",
     "db:test:reset": "pnpm --filter @guihua/api reset-test-db",
     "db:test:down": "docker compose rm -sf mongo-test",
+    "mail:up": "docker compose up -d --wait mailpit",
+    "mail:down": "docker compose rm -sf mailpit",
     "db:seed": "pnpm --filter @guihua/api seed",
+    "db:migrate": "pnpm --filter @guihua/api db:migrate",
     "verify:isolation": "pnpm --filter @guihua/api verify:isolation"
   },
   "devDependencies": {

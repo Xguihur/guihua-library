@@ -89,9 +89,9 @@ export const commentsQuerySchema = z
   .strict()
   .superRefine(requireSafePageOffset);
 
-function toFieldIssue(issue: ZodIssue): FieldIssue {
+function toFieldIssue(issue: ZodIssue, unknownFieldReason: string): FieldIssue {
   if (issue.code === 'unrecognized_keys') {
-    return { field: issue.keys[0] ?? 'query', reason: 'unknown_query_parameter' };
+    return { field: issue.keys[0] ?? 'query', reason: unknownFieldReason };
   }
   const field = typeof issue.path[0] === 'string' ? issue.path[0] : 'query';
   switch (issue.code) {
@@ -114,11 +114,11 @@ function toFieldIssue(issue: ZodIssue): FieldIssue {
   }
 }
 
-export function fieldIssuesFromZodError(error: ZodError): FieldIssue[] {
+export function fieldIssuesFromZodError(error: ZodError, unknownFieldReason = 'unknown_query_parameter'): FieldIssue[] {
   const seen = new Set<string>();
   const issues: FieldIssue[] = [];
   for (const issue of error.issues) {
-    const mapped = toFieldIssue(issue);
+    const mapped = toFieldIssue(issue, unknownFieldReason);
     const key = `${mapped.field}:${mapped.reason}`;
     if (seen.has(key)) continue;
     seen.add(key);

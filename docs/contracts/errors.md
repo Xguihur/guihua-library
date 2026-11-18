@@ -32,13 +32,13 @@
 | 错误码 | HTTP | 语义 |
 |---|---:|---|
 | `VALIDATION_ERROR` | `400` | 请求语法、字段格式、未知字段、分页或查询参数不符合契约 |
-| `INVALID_USERNAME` | `400` 或 `422` | 注册或用户名变更时用户名不满足 ASCII、长度或中文禁用规则，返回 `INVALID_USERNAME`，不得静默退回 `VALIDATION_ERROR`；具体采用 400 还是 422 必须在认证实现前由 ADR 冻结，不能随机切换 |
+| `INVALID_USERNAME` | `400` | 注册或 `PATCH /api/me` 时用户名在 `trim` 后不匹配 `^[A-Za-z][A-Za-z0-9_]{2,31}$`，返回 `INVALID_USERNAME`，`details` 为 `{field:"username",reason:"invalid_username"}`；不得静默退回 `VALIDATION_ERROR`。400/422 已由 [ADR 0002](../adr/0002-account-and-session.md) 冻结为 400，不得随机切换 |
 | `UNAUTHORIZED` | `401` | 没有有效会话或受保护资源的认证已失效 |
 | `INVALID_CREDENTIALS` | `401` | 登录凭据不正确；不得区分账号不存在、邮箱未注册或密码错误 |
 | `FORBIDDEN` | `403` | 已认证，但不具备所需角色、权限或资源所有权 |
 | `NOT_FOUND` | `404` | 资源不存在、不可见或被隐藏；公开接口不得据此枚举隐藏资源 |
 | `IDENTITY_CONFLICT` | `409` | 用户名、归一化邮箱、slug 或 OAuth provider subject 已存在 |
-| `LAST_LOGIN_METHOD` | `409` | 解绑会使账号失去最后一种可用登录方式；必须先建立并验证备用方式 |
+| `LAST_LOGIN_METHOD` | `409` | 解绑会使账号失去最后一种可用登录方式；必须先建立并验证备用方式。状态已由 [ADR 0002](../adr/0002-account-and-session.md) 冻结 |
 | `RATE_LIMITED` | `429` | 触发注册、会话、OAuth、发布或评论限流 |
 | `UNPROCESSABLE_ENTITY` | `422` | 语法合法，但业务规则不满足；具体资源是否采用 400 或 422 必须在实现前固定，不能随机切换 |
 | `INTERNAL_ERROR` | `500` | 未预期服务端错误；客户端只接收稳定消息，详细原因仅进脱敏日志 |
@@ -46,7 +46,7 @@
 
 `409` 专用于唯一性冲突。`401` 和 `403` 不得互换：前者表示没有有效身份，后者表示身份存在但无权操作。删除当前会话是幂等操作，没有会话时仍返回 `204`，不返回 `401`。
 
-- `INVALID_USERNAME` 与 `UNPROCESSABLE_ENTITY` 的 `400`/`422` 细分属于[待决事项](../DECISIONS.md)中保留的边界：最终选择必须在认证实现前由 ADR 冻结，冻结前不得把非法用户名静默并入 `VALIDATION_ERROR`，也不得在同一错误上随机切换状态码。本表列出约定的错误码，不固定状态码、不新增业务规则。
+- `INVALID_USERNAME`（固定 `400`）与 `UNPROCESSABLE_ENTITY`（仅语法合法但业务规则不满足的资源使用）的细分已由 [ADR 0002](../adr/0002-account-and-session.md) 冻结：非法用户名一律 400 + `INVALID_USERNAME`，不静默并入 `VALIDATION_ERROR`；`UNPROCESSABLE_ENTITY` 不在 M2a 使用，后续资源启用时须在实现前固定。状态机不得按请求随机切换。本表错误码同步到共享 contracts、`docs/contracts/restful-api.md`、测试与任务验收记录。
 
 ## 资源规则
 

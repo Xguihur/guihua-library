@@ -2,9 +2,9 @@
 
 一个面向多人分享阅读记录的小型社区，也是持续实践前后端开发、测试、部署和线上运维的个人项目。
 
-访客可以浏览阅读记录、阅读状态、书评和评论。登录用户发布自己的阅读记录并参与评论（M2/M3），管理员维护内容与用户（M4）。
+访客可以浏览阅读记录、阅读状态、书评和评论。用户可注册、登录、管理资料和登录方式（M2）；发布自己的阅读记录并参与评论随 M3 开放，管理员维护内容与用户（M4）。
 
-**当前状态（2026-11-15）：M1 全部交付，本地验证已通过——依赖安装、typecheck、lint、离线测试、构建、真实 MongoDB 集成、浏览器 smoke、seed 幂等与测试库隔离均实际执行并退出 0。M2–M5 未开始。交付分支为 `dev`，`main` 保持不变，尚无线上环境。证据见 [M1 §R4](docs/specs/M1.md#审查轮次-r4最终证据与收尾)。**
+**当前状态（2026-11-18）：M1 保持通过；M2 账号、会话、资料、GitHub 登录/绑定/解绑及邮件验证已实现，本地完整回归与审查修复通过。真实 GitHub 授权尚缺凭据，M2 整体验收仍标记外部验证阻塞。交付分支为 `codex/m2-accounts`，尚无线上环境。证据见 [M2 §9–10](docs/specs/M2.md)。**
 
 ## 技术栈
 
@@ -19,6 +19,7 @@ corepack enable
 pnpm install --frozen-lockfile      # 按仓库内 pnpm-lock.yaml 精确安装
 cp .env.example .env                # 本地配置，不入库
 pnpm db:dev:up                      # 开发库 127.0.0.1:27017
+pnpm db:migrate                     # 已有 M1 开发库先做冲突检查与索引迁移
 pnpm db:seed                        # 幂等写入演示数据
 pnpm dev                            # API http://127.0.0.1:3000/api ，页面 http://127.0.0.1:5173/books
 ```
@@ -27,7 +28,8 @@ pnpm dev                            # API http://127.0.0.1:3000/api ，页面 ht
 
 ## 检查与验证
 
-以下命令在 2026-11-15 的本地收尾中全部实际执行并退出 0；命令、数量与关键断言见 [M1 §R4](docs/specs/M1.md#审查轮次-r4最终证据与收尾)。
+以下命令在 2026-11-18 的 M2 本地收尾中全部实际执行并退出 0；共 170 项单元/组件测试、100 项集成测试及浏览器 smoke，证据见 [M2 §9–10](docs/specs/M2.md)。
+
 | 命令 | 作用 |
 |---|---|
 | `pnpm typecheck` | contracts/web/API 类型检查 |
@@ -48,7 +50,11 @@ pnpm dev                            # API http://127.0.0.1:3000/api ，页面 ht
 - `GET /api/books/:bookId`
 - `GET /api/books/:bookId/comments?page=1&pageSize=20`
 - `GET /api/health/live`、`GET /api/health/ready`
-- `POST /api/books`、`POST /api/books/:bookId/comments`：M1 无会话，固定 `401 UNAUTHORIZED`
+- `POST /api/users`、`POST /api/sessions`、`GET/DELETE /api/sessions/current`
+- `GET/PATCH /api/me`、`GET /api/me/login-methods`，GitHub 与邮箱验证端点见 [HTTP 契约](docs/contracts/restful-api.md)。
+- `POST /api/books`、`POST /api/books/:bookId/comments`：匿名 `401`，有效会话 `403`（M3 才开放写入）。
+
+GitHub OAuth App 与本地 Mailpit 配置见 [开发说明](docs/DEVELOPMENT.md)；缺配置时相关入口返回 503，其余功能可运行。
 
 ## 从这里读
 

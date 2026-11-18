@@ -10,7 +10,7 @@
 | [DECISIONS.md](DECISIONS.md) | 未决问题及解决时点 |
 | [RESTful API](contracts/restful-api.md)、[错误语义](contracts/errors.md) | HTTP 与数据边界的唯一维护位置 |
 | [M1 规格与证据](specs/M1.md) | 已交付公开书库的设计与验收记录 |
-| [M2 规格与证据](specs/M2.md) | 账号与资料设计、OMP / WorkBuddy CLI 执行协议与后续证据 |
+| [M2 规格与证据](specs/M2.md) | 账号与资料设计、CodeBuddy/Codex 执行协议与 A–E 批次真实证据（真实 GitHub/生产 SMTP 外部流程仍阻塞） |
 | [技术栈 ADR](adr/0001-stack-and-workspace.md) | 已选技术栈和依赖边界 |
 
 ## 维护规则

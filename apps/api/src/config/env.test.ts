@@ -7,6 +7,23 @@ describe('environment validation', () => {
       NODE_ENV: 'development',
       PORT: 3000,
       MONGODB_URI: 'mongodb://127.0.0.1:27017/guihua_library',
+      ALLOWED_ORIGINS: ['http://127.0.0.1:5173', 'http://localhost:5173'],
+      GITHUB_CLIENT_ID: '',
+      GITHUB_CLIENT_SECRET: '',
+      GITHUB_CALLBACK_URL: 'http://127.0.0.1:3000/api/oauth/github/callback',
+      GITHUB_AUTHORIZE_URL: 'https://github.com/login/oauth/authorize',
+      GITHUB_TOKEN_URL: 'https://github.com/login/oauth/access_token',
+      GITHUB_USER_URL: 'https://api.github.com/user',
+      SMTP_HOST: '',
+      SMTP_PORT: 1025,
+      SMTP_USER: '',
+      SMTP_PASS: '',
+      SMTP_SECURE: false,
+      SMTP_REQUIRE_TLS: false,
+      SMTP_FROM: 'no-reply@guihua.local',
+      MAIL_TIMEOUT_MS: 5000,
+      MAILPIT_API_URL: 'http://127.0.0.1:8025',
+      WEB_BASE_URL: 'http://127.0.0.1:5173',
     });
   });
 
@@ -31,6 +48,23 @@ describe('environment validation', () => {
     expect(() =>
       validateEnv({ NODE_ENV: 'test', MONGODB_URI: 'mongodb://127.0.0.1:27017/guihua_library' }),
     ).toThrow(/guihua_library_test/);
+  });
+
+  it('accepts only an absolute http(s) site origin for WEB_BASE_URL', () => {
+    expect(validateEnv({ MONGODB_URI: 'mongodb://127.0.0.1:27017/guihua_library', WEB_BASE_URL: 'https://site.example' }).WEB_BASE_URL).toBe('https://site.example');
+    expect(validateEnv({ MONGODB_URI: 'mongodb://127.0.0.1:27017/guihua_library', WEB_BASE_URL: 'http://localhost:5173/' }).WEB_BASE_URL).toBe('http://localhost:5173');
+    for (const bad of [
+      '/oauth-result',
+      '//evil.example',
+      'http://user:pass@site.example',
+      'ftp://site.example',
+      'https://site.example/path',
+      'https://site.example?x=1',
+      'https://site.example#frag',
+      'https://*.example',
+    ]) {
+      expect(() => validateEnv({ MONGODB_URI: 'mongodb://127.0.0.1:27017/guihua_library', WEB_BASE_URL: bad })).toThrow(/WEB_BASE_URL/);
+    }
   });
 
   it('rejects a non-decimal port', () => {

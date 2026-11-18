@@ -90,6 +90,7 @@ describe('exception filter', () => {
       code: 'SERVICE_UNAVAILABLE',
       message: 'Service dependencies are unavailable.',
       details: [],
+      headers: {},
     });
   });
 });

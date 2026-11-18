@@ -17,6 +17,7 @@ interface ResolvedError {
   code: ApiErrorCode;
   message: string;
   details: FieldIssue[];
+  headers: Record<string, string>;
 }
 
 const UNAVAILABLE_ERROR_NAMES = new Set([
@@ -69,6 +70,7 @@ export function resolveError(exception: unknown): ResolvedError {
       code: exception.code,
       message: exception.code === 'INTERNAL_ERROR' ? 'An unexpected error occurred.' : messageOf(exception.getResponse(), stableMessage(exception.getStatus(), exception.code)),
       details: exception.details,
+      headers: exception.headers,
     };
   }
 
@@ -79,13 +81,14 @@ export function resolveError(exception: unknown): ResolvedError {
       code: 'VALIDATION_ERROR',
       message: 'Request could not be processed.',
       details: exception.details,
+      headers: {},
     };
   }
 
   if (exception instanceof HttpException) {
     const status = exception.getStatus();
     const code = httpStatusToCode(status);
-    return { status, code, message: stableMessage(status, code), details: [] };
+    return { status, code, message: stableMessage(status, code), details: [], headers: {} };
   }
 
   if (exception instanceof Error && UNAVAILABLE_ERROR_NAMES.has(exception.name)) {
@@ -94,6 +97,7 @@ export function resolveError(exception: unknown): ResolvedError {
       code: 'SERVICE_UNAVAILABLE',
       message: 'Service dependencies are unavailable.',
       details: [],
+      headers: {},
     };
   }
 
@@ -102,6 +106,7 @@ export function resolveError(exception: unknown): ResolvedError {
     code: 'INTERNAL_ERROR',
     message: 'An unexpected error occurred.',
     details: [],
+    headers: {},
   };
 }
 
@@ -127,6 +132,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
       // Log the error class only: messages may contain connection details or credentials.
       const name = exception instanceof Error ? exception.name : 'UnknownError';
       this.logger.error(`requestId=${requestId} code=${resolved.code} error=${name}`);
+    }
+
+    for (const [name, value] of Object.entries(resolved.headers)) {
+      response.setHeader(name, value);
     }
 
     const body: ApiErrorBody = {

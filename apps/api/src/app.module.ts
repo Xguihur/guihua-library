@@ -7,6 +7,8 @@ import { DatabaseModule } from './database/database.module';
 import { BooksModule } from './books/books.module';
 import { CommentsModule } from './comments/comments.module';
 import { HealthModule } from './health/health.module';
+import { AuthModule } from './auth/auth.module';
+import { M2cModule } from './m2c/m2c.module';
 
 @Module({
   imports: [
@@ -20,6 +22,8 @@ import { HealthModule } from './health/health.module';
       }),
     }),
     DatabaseModule,
+    AuthModule,
+    M2cModule,
     BooksModule,
     CommentsModule,
     HealthModule,

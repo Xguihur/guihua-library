@@ -1,13 +1,5 @@
-import { type CanActivate, Injectable } from '@nestjs/common';
-import { unauthorizedError } from './api-exception';
-
 /**
- * M1 has no authentication yet, so every write is rejected with 401 instead of
- * pretending a session exists. M2 replaces this with real session validation.
+ * M1 path kept stable for the book/comment placeholders. The real implementation
+ * now lives with the session module: anonymous writes are 401, valid sessions 403.
  */
-@Injectable()
-export class AuthenticatedGuard implements CanActivate {
-  canActivate(): boolean {
-    throw unauthorizedError();
-  }
-}
+export { AuthenticatedGuard } from '../auth/session.guard';
