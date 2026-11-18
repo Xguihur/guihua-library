@@ -32,6 +32,8 @@
 
 ## M2：账号与资料
 
+实施规格已于 2026-11-18 编写，尚未开始实现：见 [M2 spec](specs/M2.md)。按 M2a → M2b → M2c 推进，由 OMP 调度、WorkBuddy CLI 编写代码/测试及修复。
+
 - [ ] M2a：邮箱注册、登录、当前会话、退出撤销、密码哈希、限流和 Cookie 安全。
 - [ ] M2b：个人资料读取/修改、用户名唯一性和头像来源规则。
 - [ ] M2c：GitHub OAuth、state/PKCE、首次用户名设置；不按邮箱静默合并身份。
@@ -68,7 +70,7 @@
 
 ## 当前下一步
 
-M2 账号与资料：先确定会话、密码哈希、限流和 GitHub OAuth 的边界，再按行为测试推进邮箱登录、资料维护与 OAuth。M1 的最终复测、提交与推送由 Codex 收尾，在此之前不声称已上线或已推送。
+按 [M2 spec](specs/M2.md) 先同步身份与会话规则，再完成 M2a 邮箱注册/登录闭环，随后实现资料维护与 GitHub OAuth。M1 已提交为 `363ab02`，当前本地 `dev` 与远程跟踪引用 `origin/dev` 一致；尚无线上环境。
 
 ## 验收记录格式
 
@@ -78,7 +80,7 @@ M2 账号与资料：先确定会话、密码哈希、限流和 GitHub OAuth 的
 
 ### 2026-11-15 M1
 
-- 提交 SHA：无新增（main/dev 仍为阶段前 37337c1；提交与推送由 Codex 收尾）。
+- 提交 SHA：`363ab02`（M1 交付；2026-11-18 核对本地 dev 与 origin/dev 跟踪引用一致，main 保持 `37337c1`）。
 - 交付行为：公开书库列表/状态筛选/分页、详情、评论读取；dev/test 双库、seed、reset 隔离、smoke 与 CI 配置。
 - 验证命令与结果（Codex 实际执行，均退出 0）：frozen install、`pnpm typecheck`、`pnpm lint`、`pnpm test`（最终离线 87 项）、`pnpm build`、`pnpm test:integration`（真实 Mongo 26 项）、`pnpm smoke`；`pnpm db:seed` 连续两次、`pnpm db:test:reset` 连续两次、`pnpm verify:isolation` 各通过。停 mongo-dev 时 ready 与 books 均返回 503 且无 URI/堆栈，重启恢复。
 - 审查结论：R1–R4 均基于真实命令复核；R4 全部命令通过。最终离线复测 87 项通过，审查无剩余阻塞；交付分支 `dev`。

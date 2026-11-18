@@ -9,7 +9,8 @@
 | [DEVELOPMENT.md](DEVELOPMENT.md) | 开发、测试、环境隔离、部署与交付规则 |
 | [DECISIONS.md](DECISIONS.md) | 未决问题及解决时点 |
 | [RESTful API](contracts/restful-api.md)、[错误语义](contracts/errors.md) | HTTP 与数据边界的唯一维护位置 |
-| [M1 规格与证据](specs/M1.md) | 当前阶段的详细设计、实施状态与审查记录 |
+| [M1 规格与证据](specs/M1.md) | 已交付公开书库的设计与验收记录 |
+| [M2 规格与证据](specs/M2.md) | 账号与资料设计、OMP / WorkBuddy CLI 执行协议与后续证据 |
 | [技术栈 ADR](adr/0001-stack-and-workspace.md) | 已选技术栈和依赖边界 |
 
 ## 维护规则

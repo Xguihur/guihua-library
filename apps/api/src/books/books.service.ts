@@ -15,6 +15,7 @@ export class BooksService {
   constructor(@InjectModel(BOOK_MODEL) private readonly books: Model<Book>) {}
 
   async list(query: BookListQuery): Promise<BookListResponse> {
+    // 桂花记录：通过 review 这段代码，我对 nest 组织后端业务服务和数据库查询关系有了更深的理解。也懂了 populate 就类似于联表查询，这里的作用是把这个外键字段替换为它对应表里的字段合集，在 schema 中有声明这个字段的 ref 对应的集合是哪个，mongoose 能自己找到集合并且把里面的字段拼接过来。
     const filter: FilterQuery<Book> = { visibility: 'published' };
     if (query.status) filter.status = query.status;
 
