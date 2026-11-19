@@ -130,8 +130,23 @@ export const sessionCurrentSchema = z.object({
 /** M2c §6 request/response shapes. Every write body is strict; no server field is accepted. */
 export const emptyJsonBodySchema = z.object({}).strict();
 
+/**
+ * RFC 9207 §2 (https://www.rfc-editor.org/rfc/rfc9207.html): the authorization
+ * response MAY include `iss` and clients MUST NOT ignore it. The real GitHub
+ * callback sends `iss=https://github.com/login/oauth`; only that issuer is
+ * accepted (github.com only, no extra configuration). An absent `iss` stays
+ * valid so older official responses and the simulated test double keep working.
+ * A duplicated query parameter arrives as an array and still fails validation,
+ * and the object stays strict so unknown query fields are never stripped.
+ */
+export const GITHUB_AUTHORIZATION_ISSUER = 'https://github.com/login/oauth';
+
 export const oauthCallbackQuerySchema = z
-  .object({ code: z.string().min(1), state: z.string().min(1) })
+  .object({
+    code: z.string().min(1),
+    state: z.string().min(1),
+    iss: z.literal(GITHUB_AUTHORIZATION_ISSUER).optional(),
+  })
   .strict();
 
 export const passwordReauthSchema = z.object({ password: z.string() }).strict();

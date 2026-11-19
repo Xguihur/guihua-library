@@ -27,6 +27,23 @@ describe('M2c shared contracts (§6 strict shapes)', () => {
     expect(() => oauthCallbackQuerySchema.parse({ code: 'c', state: 's', returnTo: 'https://evil' })).toThrow();
   });
 
+  it('accepts the RFC 9207 iss parameter only for the github.com issuer', () => {
+    // RFC 9207 §2: the authorization response MAY include `iss`, and clients
+    // MUST NOT ignore it. GitHub's real callback sends
+    // iss=https://github.com/login/oauth; the mock responses used before did not.
+    expect(
+      oauthCallbackQuerySchema.parse({ code: 'c', state: 's', iss: 'https://github.com/login/oauth' }),
+    ).toEqual({ code: 'c', state: 's', iss: 'https://github.com/login/oauth' });
+    // A foreign issuer must fail, never be stripped or forwarded.
+    expect(() =>
+      oauthCallbackQuerySchema.parse({ code: 'c', state: 's', iss: 'https://evil.example/login/oauth' }),
+    ).toThrow();
+    // A duplicated query parameter arrives as an array and must fail.
+    expect(() =>
+      oauthCallbackQuerySchema.parse({ code: 'c', state: 's', iss: ['https://github.com/login/oauth'] }),
+    ).toThrow();
+  });
+
   it('accepts only a password for password reauthentication', () => {
     expect(passwordReauthSchema.parse({ password: 'a-long-enough-password' })).toBeDefined();
     expect(() => passwordReauthSchema.parse({ password: 'x', userId: 'victim' })).toThrow();

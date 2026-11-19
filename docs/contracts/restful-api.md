@@ -29,7 +29,7 @@
 | `GET` | `/api/me` | 是 | 无 | `200 UserPublic` |
 | `PATCH` | `/api/me` | 是 | `username/gender/avatarUrl/signature` 的非空子集 | `200` 更新后的 `UserPublic` |
 | `GET` | `/api/oauth/github/authorization` | 否 | 无 | 重定向；生成并保存 state/PKCE（M2c） |
-| `GET` | `/api/oauth/github/callback` | 否 | `code/state` | 校验后跳转站内并清除查询串（M2c） |
+| `GET` | `/api/oauth/github/callback` | 否 | `code/state`，可含 RFC 9207 `iss`（仅接受 `https://github.com/login/oauth`，缺省兼容；错误/重复 issuer 或未知字段 `400`，不调用换 token） | 校验后跳转站内并清除查询串（M2c） |
 
 **精确 DTO**（运行时 schema、共享类型和 HTTP 断言保持一致）：
 - `UserPublic` = `{id, username, gender, avatarUrl, signature, createdAt}`；`id` 为字符串，`createdAt` 为 ISO 时间。公共作者投影保持 M1 的 `{id, username, avatarUrl}`，不自动扩大。
@@ -61,7 +61,7 @@
 
 邮箱密码注册不强制验证；GitHub 用户添加密码方式必须验证邮箱。已存在邮箱密码时，只能验证原邮箱，不更换邮箱或覆盖密码。OAuth login/link/reauth 共享既有 callback，purpose、userId、原 session 由服务端 state 记录决定，不能由客户端覆盖。绑定冲突 409 IDENTITY_CONFLICT；复核缺失/过期 403 FORBIDDEN；无效验证挑战 400 VALIDATION_ERROR。身份方式变更后撤销其他会话并轮换当前 Cookie，公共 DTO 不暴露登录方式或邮箱。
 
-批次 E 已按本节实现上述端点并通过本地真实 HTTP/数据库与 Mailpit 实投验证（见 [M2 §9](../specs/M2.md)）。浏览器回调默认 302 到固定结果页并清除 code/state 查询串；带 `Accept: application/json` 的回调返回契约错误状态（绑定冲突 409）。真实 GitHub 授权/重新登录与生产 SMTP 投递仍未验证，不能据此宣称外部流程可用。
+批次 E 已按本节实现上述端点并通过本地真实 HTTP/数据库与 Mailpit 实投验证（见 [M2 §9](../specs/M2.md)）。浏览器回调默认 302 到固定结果页并清除 code/state 查询串；带 `Accept: application/json` 的回调返回契约错误状态（绑定冲突 409）。GitHub OAuth 凭据已在本地配置（2026-11-20）；真实回调实测曾因 RFC 9207 `iss` 参数被严格 schema 拒绝（`status=invalid`），已按 [RFC 9207](https://www.rfc-editor.org/rfc/rfc9207.html) 修复并通过真实 HTTP 集成验证，真实登录完整流程待 Codex 浏览器复验，不能据此宣称真实登录已成功。生产 SMTP 投递仍未验证。
 
 ### 当前用户
 

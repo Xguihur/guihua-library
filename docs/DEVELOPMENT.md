@@ -1,6 +1,6 @@
 # 开发、测试与环境
 
-更新日期：2026-11-18。M1 已在本地完成全流程验证；M2 批次 A–E（契约/ADR、M2a API/UI、M2b 资料 API/UI、M2c GitHub/复核/邮件验证）均已实现并以真实命令、浏览器和本地 Mailpit 实投验证；真实 GitHub 授权与生产 SMTP 仍未验证，M2 标记外部阻塞。工作分支 `codex/m2-accounts` 尚未提交，远程 CI 与线上环境仍未启用。
+更新日期：2026-11-18。M1 已在本地完成全流程验证；M2 批次 A–E（契约/ADR、M2a API/UI、M2b 资料 API/UI、M2c GitHub/复核/邮件验证）均已实现并以真实命令、浏览器和本地 Mailpit 实投验证；真实 GitHub 直接登录/重登已于 2026-11-20 验证，真实绑定/解绑与生产 SMTP 仍未验证，M2 标记外部阻塞。工作分支 `codex/m2-accounts` 已提交并推送，远程 CI 与线上环境仍未启用。
 
 ## 开发节奏
 
@@ -36,11 +36,11 @@
 
 两库各自是独立单节点 replica set（`rsDev` / `rsTest`），不是 standalone，因此 MongoDB 事务可用；`up` 命令会等待各自主节点就绪。M1 开发库的账号回填与新增索引用 `pnpm db:migrate` 完成，可重复执行，只作用于白名单本地库，遇到用户名/邮箱冲突即停止、不清库。批次 E 起，迁移在预检通过后先建 string-only partial unique 索引，再按**精确名**删除已知 M1 旧 `users_email_unique`（让多个 null 邮箱 OAuth-only 用户共存）；未知索引保留，回滚需先移除所有 null 邮箱用户后手动重建该索引。
 
-邮件验证在本地用仅绑定 `127.0.0.1` 的 Mailpit 捕获：SMTP `127.0.0.1:1025`、HTTP API `127.0.0.1:8025`，`pnpm mail:up` 启动、`pnpm mail:down` 仅移除该容器（消息只存内存）。SMTP、GitHub 均为可选配置：缺 GitHub client id/secret 或 SMTP_HOST 时相关入口返回脱敏 503，其余功能照常；测试用的 GitHub 是明确标注“模拟 GitHub（测试替身）”的注入替身，不是真实授权。生产 SMTP 与真实 GitHub 回调均未验证。
+邮件验证在本地用仅绑定 `127.0.0.1` 的 Mailpit 捕获：SMTP `127.0.0.1:1025`、HTTP API `127.0.0.1:8025`，`pnpm mail:up` 启动、`pnpm mail:down` 仅移除该容器（消息只存内存）。SMTP、GitHub 均为可选配置：缺 GitHub client id/secret 或 SMTP_HOST 时相关入口返回脱敏 503，其余功能照常；测试用的 GitHub 是明确标注“模拟 GitHub（测试替身）”的注入替身，不是真实授权。真实 GitHub 回调、直接登录及退出后重登已验证；生产 SMTP 与真实绑定/解绑仍未验证。
 
 生产 SMTP 必须显式启用 TLS，不能沿用本地明文配置：`SMTP_SECURE=true` + `SMTP_PORT=465` 为隐式 TLS；`SMTP_SECURE=false` + `SMTP_REQUIRE_TLS=true` + `SMTP_PORT=587` 为强制 STARTTLS。两个开关默认均为 `false`，只服务于本地 Mailpit；带凭据的连接不得在明文通道上发送。连接、问候和 socket 超时由 `MAIL_TIMEOUT_MS` 限定。
 
-GitHub OAuth 的授权码流程与 PKCE S256 参数按[官方“Authorizing OAuth Apps”文档](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps)核对：本项目发送 `code_challenge`/`code_challenge_method=S256` 与服务端生成的 `state`，换 token 时提交 `code_verifier`，回调 `redirect_uri` 必须与 OAuth App 注册值逐字一致且不从请求参数读取。真实 GitHub 授权尚未执行，本地仅以模拟替身覆盖协议与数据库行为。
+GitHub OAuth 的授权码流程与 PKCE S256 参数按[官方“Authorizing OAuth Apps”文档](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps)核对：本项目发送 `code_challenge`/`code_challenge_method=S256` 与服务端生成的 `state`，换 token 时提交 `code_verifier`，回调 `redirect_uri` 必须与 OAuth App 注册值逐字一致且不从请求参数读取。真实 GitHub 授权、直接登录及重登已执行；回调显式校验 RFC 9207 issuer（见 M2 证据）。其余协议边界和并发由本地模拟替身与真实数据库测试覆盖。
 
 配置只提供无密钥 `.env.example`。API 与 CLI 入口从仓库根目录读取 `.env`（cwd 在仓库内即可，不要求等于仓库根），并用 zod 校验 `MONGODB_URI`、`PORT`、`NODE_ENV`、`ALLOWED_ORIGINS`：`PORT` 必须是 1–65535 的十进制整数，`MONGODB_URI` 必须是带主机和库名的 `mongodb://` URI，`ALLOWED_ORIGINS` 是精确 http(s) 源白名单（不接受通配符）；缺失或非法直接失败。错误只列字段名，不回显 URI、凭据或堆栈。
 

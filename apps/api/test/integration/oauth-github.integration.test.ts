@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import { GITHUB_CLIENT, type GitHubProfile } from '../../src/m2c/github-client';
 import { createTestContext, type TestContext } from './helpers/test-app';
@@ -363,4 +363,95 @@ describe('issue 3 - browser redirects use the validated WEB_BASE_URL', () => {
     expect(user?.avatarUrl).toBe(null);
   });
 
+});
+
+describe('M2c §6.2 RFC 9207 iss parameter on the real callback', () => {
+  const ISSUER = 'https://github.com/login/oauth';
+
+  function callbackWith(who: ReturnType<typeof agent>, code: string, state: string, extra: string) {
+    return who
+      .get(`/api/oauth/github/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}${extra}`)
+      .set('Accept', 'application/json');
+  }
+
+  it('accepts the real GitHub callback with iss and finishes login through the original state/PKCE/browser/session checks', async () => {
+    const browser = agent();
+    const { state } = await beginLogin(browser, 'code-iss-ok', profileA);
+    const result = await callbackWith(browser, 'code-iss-ok', state, `&iss=${encodeURIComponent(ISSUER)}`);
+    expect(result.status).toBe(302);
+    expect(result.headers.location).toBe('http://127.0.0.1:5173/oauth-result?status=login-success');
+    const user = await ctx.users.findOne({ usernameNormalized: { $regex: /^gh_/ } }).lean();
+    expect(user).not.toBeNull();
+    const stored = await ctx.oauthStates.findOne({}).lean();
+    expect(stored?.consumedAt).not.toBeNull();
+  });
+
+  it('still enforces browser binding, replay and expiry while iss is present', async () => {
+    const owner = agent();
+    const { state } = await beginLogin(owner, 'code-iss-bind', profileA);
+    const attacker = agent();
+    const mismatch = await callbackWith(attacker, 'code-iss-bind', state, `&iss=${encodeURIComponent(ISSUER)}`);
+    expect(mismatch.status).toBe(403);
+    expect((await callbackWith(owner, 'code-iss-bind', state, `&iss=${encodeURIComponent(ISSUER)}`)).status).toBe(302);
+    const replay = await callbackWith(owner, 'code-iss-bind', state, `&iss=${encodeURIComponent(ISSUER)}`);
+    expect(replay.status).toBe(400);
+  });
+
+  it('rejects a foreign issuer with 400 and never exchanges the code', async () => {
+    const browser = agent();
+    const { state } = await beginLogin(browser, 'code-iss-evil', profileA);
+    simulated.setProfile('code-iss-evil', profileA);
+    const spy = vi.spyOn(simulated, 'exchangeCode');
+    try {
+      const evil = await callbackWith(
+        browser,
+        'code-iss-evil',
+        state,
+        `&iss=${encodeURIComponent('https://evil.example/login/oauth')}`,
+      );
+      expect(evil.status).toBe(400);
+      expect(spy).not.toHaveBeenCalled();
+      expect(await ctx.users.countDocuments({})).toBe(0);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('rejects a duplicated issuer (query array) with 400 and never exchanges the code', async () => {
+    const browser = agent();
+    const { state } = await beginLogin(browser, 'code-iss-dup', profileA);
+    simulated.setProfile('code-iss-dup', profileA);
+    const spy = vi.spyOn(simulated, 'exchangeCode');
+    try {
+      const duplicated = await callbackWith(
+        browser,
+        'code-iss-dup',
+        state,
+        `&iss=${encodeURIComponent(ISSUER)}&iss=${encodeURIComponent(ISSUER)}`,
+      );
+      expect(duplicated.status).toBe(400);
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('still rejects unknown query fields without exchanging the code', async () => {
+    const browser = agent();
+    const { state } = await beginLogin(browser, 'code-iss-unknown', profileA);
+    simulated.setProfile('code-iss-unknown', profileA);
+    const spy = vi.spyOn(simulated, 'exchangeCode');
+    try {
+      const hostile = await callbackWith(
+        browser,
+        'code-iss-unknown',
+        state,
+        `&iss=${encodeURIComponent(ISSUER)}&returnTo=http://evil.example/steal`,
+      );
+      expect(hostile.status).toBe(400);
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
 });
