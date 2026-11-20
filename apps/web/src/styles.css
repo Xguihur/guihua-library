@@ -52,7 +52,9 @@ button:focus-visible {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem 1.5rem;
-  align-items: baseline;
+  /* Center alignment keeps the header from jittering when the avatar (or the
+     anonymous links) swap in and out. */
+  align-items: center;
   justify-content: space-between;
   padding: 1rem clamp(1rem, 4vw, 2.5rem);
   border-bottom: 1px solid var(--line);
@@ -69,6 +71,127 @@ button:focus-visible {
 .site-nav a {
   text-decoration: none;
   font-weight: 600;
+}
+
+.site-nav {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  min-width: 0;
+}
+
+.nav-error {
+  color: var(--danger);
+  min-width: 0;
+}
+
+/* --- Avatar + user menu ---------------------------------------------------- */
+
+/* The wrapper owns hover: moving from the avatar into the panel never leaves
+   the wrapper, so there is no dead zone and the menu stays open. */
+.user-menu {
+  position: relative;
+  display: flex;
+}
+
+/* 40px visual avatar on a 44px hit area: the button is the touch target. */
+.avatar-button {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+
+.avatar-button:hover,
+.avatar-button:focus-visible {
+  background: var(--paper);
+}
+
+.avatar {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
+
+.avatar--fallback {
+  display: grid;
+  place-items: center;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+
+/* The panel hangs flush under the button (top: 100%, no margin) so the hover
+   area is continuous. Anchoring to the right edge keeps it inside small
+   screens instead of overflowing. */
+.user-menu__panel {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 20;
+  min-width: 12rem;
+  display: grid;
+  padding: 0.5rem;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 24px rgba(31, 37, 33, 0.14);
+}
+
+.user-menu__name {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+
+.user-menu__panel a {
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.5rem;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.user-menu__panel a:hover,
+.user-menu__logout:hover {
+  background: var(--paper);
+}
+
+.user-menu__divider {
+  margin: 0.35rem 0;
+  border: none;
+  border-top: 1px solid var(--line);
+}
+
+.user-menu__logout {
+  font: inherit;
+  text-align: left;
+  padding: 0.55rem 0.75rem;
+  border: none;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--danger);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+@media (max-width: 30rem) {
+  .site-nav {
+    gap: 1rem;
+  }
+
+  .user-menu__panel {
+    min-width: 10rem;
+  }
 }
 
 .site-main {

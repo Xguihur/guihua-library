@@ -143,6 +143,15 @@ async function runBrowserFlow(page: Page): Promise<void> {
 
 /** Registration, reload restore, profile edit, logout and the old-cookie 401 check. */
 async function runAuthFlow(page: Page): Promise<void> {
+  // The authenticated header shows only the avatar; username and actions live
+  // in the dropdown panel. Hover opens it for mouse users; Playwright's click
+  // would first move the pointer (mouseenter opens the menu) and then toggle
+  // it shut, so opening must use hover explicitly.
+  const openUserMenu = async (): Promise<void> => {
+    await page.getByTestId('nav-avatar').hover();
+    await page.getByTestId('nav-user').waitFor({ timeout: 10000 });
+  };
+
   await page.goto(`${WEB_BASE}/register`, { waitUntil: 'domcontentloaded' });
   await page.getByTestId('register-email').fill('smoke@example.com');
   await page.getByTestId('register-username').fill('Smoke_Reader');
@@ -150,7 +159,12 @@ async function runAuthFlow(page: Page): Promise<void> {
   await page.getByTestId('register-submit').click();
   await page.getByTestId('profile-save').waitFor({ timeout: 15000 });
   await page.waitForURL(/\/me$/, { timeout: 10000 });
+  await openUserMenu();
   await page.getByTestId('nav-user').filter({ hasText: 'Smoke_Reader' }).waitFor({ timeout: 10000 });
+
+  // Moving the pointer out of the avatar+panel wrapper collapses it again.
+  await page.mouse.move(10, 400);
+  await page.getByTestId('nav-user').waitFor({ state: 'hidden', timeout: 10000 });
 
   const sessionCookie = (await page.context().cookies())
     .filter((cookie) => cookie.name === SESSION_COOKIE_NAME)
@@ -160,7 +174,23 @@ async function runAuthFlow(page: Page): Promise<void> {
 
   // Refresh restores identity from the server session, not from local storage.
   await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.getByTestId('nav-avatar').waitFor({ timeout: 10000 });
+  // Route navigation (and reload) collapses the menu again.
+  assert(
+    !(await page.getByTestId('nav-logout').isVisible()),
+    'expected the user menu to be collapsed after a reload',
+  );
+  await openUserMenu();
   await page.getByTestId('nav-user').filter({ hasText: 'Smoke_Reader' }).waitFor({ timeout: 10000 });
+
+  // Click toggles independently of hover: the pointer move inside click()
+  // re-opens the menu via mouseenter, so the first click lands on an open menu
+  // and toggles it shut; a second click (pointer already inside the wrapper,
+  // so no new mouseenter) toggles it back open. Touch screens share this handler.
+  await page.getByTestId('nav-avatar').click();
+  await page.getByTestId('nav-user').waitFor({ state: 'hidden', timeout: 10000 });
+  await page.getByTestId('nav-avatar').click();
+  await page.getByTestId('nav-user').waitFor({ timeout: 10000 });
 
   // A valid session still gets a truthful 403 for unopened M3 writes.
   const authedWrite = await page.evaluate(async () => {
@@ -192,6 +222,7 @@ async function runAuthFlow(page: Page): Promise<void> {
   assert(signature === 'smoke 签名更新', `expected saved signature, saw ${signature}`);
 
   // Logout clears the local identity; the previously issued cookie is now inert.
+  await openUserMenu();
   await page.getByTestId('nav-logout').click();
   await page.getByTestId('nav-login').waitFor({ timeout: 10000 });
   const oldCookie = await fetch(`${API_BASE}/api/sessions/current`, { headers: { Cookie: sessionCookie } });
@@ -225,6 +256,7 @@ async function main(): Promise<void> {
   let api: ChildProcess | null = null;
   let web: ChildProcess | null = null;
   let browser: Browser | null = null;
+  let page: Page | null = null;
 
   try {
     await assertPortFree(API_PORT);
@@ -258,16 +290,14 @@ async function main(): Promise<void> {
     console.log('[smoke] web preview ready');
 
     browser = await chromium.launch();
-    const page = await browser.newPage();
+    page = await browser.newPage();
     await runBrowserFlow(page);
     console.log('[smoke] browser M1 flow passed');
     await runAuthFlow(page);
     console.log('[smoke] browser auth/profile flow passed');
   } catch (error) {
-    if (browser) {
-      const page = await browser.newPage().catch(() => null);
-      await page?.screenshot({ path: path.join(ARTIFACTS, 'failure.png') }).catch(() => undefined);
-    }
+    // Screenshot the failing page itself, not a fresh blank one.
+    await page?.screenshot({ path: path.join(ARTIFACTS, 'failure.png') }).catch(() => undefined);
     throw error;
   } finally {
     await browser?.close().catch(() => undefined);
